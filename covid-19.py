@@ -5,84 +5,62 @@
 ##########################################################
 
 import pandas as pd
+import math
 
+# Set options for pandas display
+pd.set_option('display.max_columns', 30)
+pd.set_option('display.max_rows', 1000)
 cases = pd.read_csv('data/time_series_covid19_confirmed_global_narrow.csv', skiprows=[1])
-deaths = pd.read_csv('data/time_series_covid19_deaths_global_narrow.csv')
-
-# Function to check if country is divided into provinces
-
-def has_provinces(country):
-    select_country = cases['Country/Region'] == country
-    select_provinces = cases['Province/State']
-    province_checker = cases[select_country & select_provinces]
-    return province_checker['Province/State']
-
-def new_cases(country):
-    select_country = cases['Country/Region'] == country
-    case_results = cases[select_country]
-    number_of_days = len(case_results[case_results["Country/Region"] == country])
-    for day in range(number_of_days):
-        total_cases_today = case_results.iloc[day, 5]
-        total_cases_today = int(total_cases_today)
-        if (day == 65):
-            total_cases_yesterday = int(total_cases_today)
-        if (day < 65):
-            total_cases_yesterday = case_results.iloc[day + 1, 5]
-        new_cases = int(total_cases_today) - int(total_cases_yesterday)
-        case_results.at[day, 'new_cases'] = new_cases
-
-
-def new_cases_provinces(province):
-    select_provinces = cases['Province/State'] == province
-    province_results = cases[select_provinces]
-    number_of_days = len(cases[cases["Province/State"] == province])
-    new_cases = 0
-    for day in range(number_of_days):
-        total_cases_today = province_results.iloc[day, 5]
-        if (day == 65):
-            total_cases_yesterday = int(total_cases_today)
-        if (day < 65):
-            total_cases_yesterday = province_results.iloc[day + 1, 5]
-
-        new_cases = int(total_cases_today) - int(total_cases_yesterday)
-        province_results.at[day, 'new_cases'] = new_cases
-
-##########################################################
-# Data Cleaning
-##########################################################
+deaths = pd.read_csv('data/time_series_covid19_deaths_global_narrow.csv', skiprows=[1])
 
 ##########################################################
 # Feature Engineering
 ##########################################################
-# country_value = cases[["Country/Region", "Value"]]
-# brazil = cases[cases["Country/Region"] == "Brazil"]
 
-countries = cases["Country/Region"].unique()
+cases = cases.rename(columns={'Value':'total_cases'})
 cases['new_cases'] = ''
 cases['total_deaths'] = ''
 cases['new_deaths'] = ''
 
+number_of_days = len(cases["Date"].unique())
+total_rows = len(cases)
+row = 0
+country_reset_flag = 0
 
-# Calculate new cases per day
-for country in countries:
+# variables
+cases_today = ''
+cases_yesterday = ''
+deaths_today = ''
+deaths_yesterday = ''
+new_cases = ''
+new_deaths = ''
+stopper = 1
 
-    # Check if country has provinces
-    province_checker = has_provinces(country)
+for i in range(total_rows):
+    province = cases.iloc[i,0]
+    country = cases.iloc[i,1]
+    lat = cases.iloc[i,2]
+    lon = cases.iloc[i,3]
+    date = cases.iloc[i, 4]
+    cases_today = cases.iloc[i, 5]
+    deaths_today = deaths.iloc[i, 5]
+    country_reset_flag = math.floor(stopper / number_of_days)
 
-    # If there are no provinces, let's calculate new cases per day for that country
-    if(len(province_checker) == 0):
-        new_cases(country)
+    if(country_reset_flag == 1):
+        stopper = 0
+        cases_yesterday = cases_today
+        deaths_yesterday = deaths_today
 
-    # If there are provinces, let's calculate new cases per day for all provinces in that country
-    if(len(province_checker) > 0 ):
-        select_country = cases['Country/Region'] == country
-        select_provinces = cases['Province/State']
-        provinces = cases[select_country & select_provinces]
-        unique_provinces = provinces['Province/State'].unique()
-        for provinces in unique_provinces:
-            new_cases_provinces(provinces)
+    if(country_reset_flag == 0):
+        cases_yesterday = cases.iloc[i + 1, 5]
+        deaths_yesterday = deaths.iloc[i + 1, 5]
+
+    new_cases = cases_today - cases_yesterday
+    new_deaths = deaths_today - deaths_yesterday
+    cases.at[i, "new_cases"] = new_cases
+    cases.at[i, "new_deaths"] = new_deaths
+    cases.at[i, "total_deaths"] = deaths_today
+    stopper += 1
 
 
-# Aggregate deaths and deaths per day into cases dataframe
-
-
+print(cases)
